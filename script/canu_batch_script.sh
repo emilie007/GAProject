@@ -20,4 +20,4 @@ genomeSize="2.6m" \
 -d "/home/emla007/genome_analyses/data/DNA_data/assembly" \
 stopOnReadQuality="false" \
 correctedErrorRate="0.04" \
--pacbio-raw '/home/emla007/genome_analyses/data/raw_data/DNA_raw_data/ERR2028*.fastq.gz'
+-pacbio-raw /home/emla007/genome_analyses/data/raw_data/DNA_raw_data/ERR2028*.fastq.gz
