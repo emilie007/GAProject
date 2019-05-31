@@ -1,0 +1,155 @@
+---
+title: "DE of L.fer"
+output: html_notebook_lfer_de
+---
+
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+Count matrix input
+
+
+```{r}
+salmon_matrix <- as.matrix(read.csv2("/Users/emilielaurent/Desktop/GA_proj/salmon_count_matrix_edited_final.csv", row.name="Name"))
+
+coldata <- read.csv("/Users/emilielaurent/Desktop/GA_proj/sample_layout.txt", row.names = 1, sep = " ")
+
+coldata
+
+```
+
+```{r}
+library("DESeq2")
+dds <- DESeqDataSetFromMatrix(countData = salmon_matrix,
+                              colData = coldata,
+                              design = ~ condition)
+dds
+```
+
+
+Pre-filtering - removes low counts before running the DESeq2
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+```
+
+Note on factor levels
+```{r}
+dds$condition <- factor(dds$condition, levels = c("Continuous","Batch"))
+```
+
+Differential expression analysis
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+res
+```
+
+```{r}
+res <- results(dds, contrast=c("condition","Batch","Continuous"))
+res
+
+```
+
+Log fold change shrinkage for visualization and ranking
+
+```{r}
+resultsNames(dds)
+resLFC <- lfcShrink(dds, coef="condition_Batch_vs_Continuous", type="apeglm")
+resLFC
+```
+
+```{r}
+library("BiocParallel")
+register(MulticoreParam(4))
+```
+
+p-values and adjusted p-values
+```{r}
+resOrdered <- res[order(res$pvalue),]
+
+```
+
+```{r}
+summary(res)
+```
+
+```{r}
+sum(res$padj < 0.1, na.rm=TRUE)
+```
+
+```{r}
+res05 <- results(dds, alpha=0.05)
+summary(res05)
+```
+
+Independent hypothesis weightning
+```{r}
+library("IHW")
+resIHW <- results(dds, filterFun=ihw)
+summary(resIHW)
+
+```
+
+```{r}
+sum(resIHW$padj < 0.1, na.rm=TRUE)
+```
+
+```{r}
+metadata(resIHW)$ihwResult
+```
+
+Exploring and exporting results
+MA-plot
+
+```{r}
+plotMA(res, ylim=c(-2,2))
+```
+
+
+
+```{r}
+plotMA(resLFC, ylim=c(-2,2))
+```
+
+
+Alternative shrinkage estimators
+the log fold are to look at the normal distribution
+the shrinked one is useful for ranking and visualisation with no need for ARBITARY filters on low count reads. 
+```{r}
+# because we are interested in treated vs untreated, we set 'coef=2'
+resNorm <- lfcShrink(dds, coef=2, type="normal")
+resAsh <- lfcShrink(dds, coef=2, type="ashr")
+```
+
+```{r}
+par(mfrow=c(1,3), mar=c(4,4,2,1))
+xlim <- c(1,1e5); ylim <- c(-3,3)
+plotMA(resLFC, xlim=xlim, ylim=ylim, main="apeglm")
+plotMA(resNorm, xlim=xlim, ylim=ylim, main="normal")
+plotMA(resAsh, xlim=xlim, ylim=ylim, main="ashr")
+```
+
+```{r}
+plotCounts(dds, gene=which.min(res$padj), intgroup="condition")
+```
+
+```{r}
+d <- plotCounts(dds, gene=which.min(res$padj), intgroup="condition", 
+                returnData=TRUE)
+library("ggplot2")
+ggplot(d, aes(x=condition, y=count)) + 
+  geom_point(position=position_jitter(w=0.1,h=0)) + 
+  scale_y_log10(breaks=c(25,100,400))
+```
+
+```{r}
+mcols(res)$description
+```
+
